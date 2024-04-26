@@ -1,5 +1,8 @@
 use bindings::*;
-use crate::netlink::SkBuff;
+
+use crate::netlink::SkBuff ; 
+pub struct NetDevice(*mut bindings::net_device) ; 
+
 
 /// 1.The Netlink subsystem which serves as the underlying transport layer for all of the Generic Netlink communications.
 /// 2.The Generic Netlink bus which is implemented inside the kernel, but which is available to userspace through the socket API and inside the kernel via the normal Netlink and Generic Netlink APIs.
@@ -179,6 +182,24 @@ impl Net {
     pub fn genlmsg_unicast(&self, skb: &SkBuff,portid: u32_,) -> core::ffi::c_int {
         unsafe { bindings::genlmsg_unicast(self.0, skb.as_ptr(), portid) }
     }
+
+    ///
+    /// dev_get_by_index - find a device by its ifindex
+    /// @net: the applicable net namespace
+    /// @ifindex: index of device
+    ///
+    /// Search for an interface by index. Returns NULL if the device
+    /// is not found or a pointer to the device. The device returned has
+    /// had a reference added and the pointer is safe until the user calls
+    /// dev_put to indicate they have finished with it.
+    ///
+    pub fn dev_get_by_index(&self, ifindex: core::ffi::c_int) -> NetDevice {
+        unsafe {
+            NetDevice(bindings::dev_get_by_index(self.0,ifindex)) 
+        }
+    }
+    
+
 
 }
 
