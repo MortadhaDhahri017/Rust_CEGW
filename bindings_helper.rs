@@ -44,7 +44,17 @@
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/rculist.h>
-
+#include <linux/can.h> 
+#include <linux/can/raw.h>
+#include <linux/can/error.h>
+#include <linux/can/dev.h> 
+#include <linux/can/vxcan.h>
+#include <linux/if_ether.h>
+#include <linux/can/core.h>
+#include <net/ip.h>
+#include <linux/can/skb.h>
+#include <linux/can/can-ml.h>
+#include <linux/ratelimit.h>
 
 
 /* `bindgen` gets confused at certain things. */
@@ -56,4 +66,3 @@ const __poll_t BINDINGS_EPOLLERR = EPOLLERR;
 const __poll_t BINDINGS_EPOLLHUP = EPOLLHUP;
 
 const loff_t BINDINGS_MAX_LFS_FILESIZE = MAX_LFS_FILESIZE;
-
