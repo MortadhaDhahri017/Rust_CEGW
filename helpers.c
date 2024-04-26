@@ -46,6 +46,19 @@
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/rculist.h>
+#include <linux/can.h> 
+#include <linux/can/raw.h>
+#include <linux/can/error.h>
+#include <linux/can/dev.h> 
+#include <linux/can/vxcan.h>
+#include <linux/if_ether.h>
+#include <linux/can/core.h>
+#include <net/ip.h>
+#include <linux/can/skb.h>
+#include <linux/can/can-ml.h>
+#include <linux/ratelimit.h>
+
+
 
 __noreturn void rust_helper_BUG(void)
 {
@@ -943,10 +956,57 @@ void rust_helper_hlist_del_rcu(struct hlist_node *n){
 }
 EXPORT_SYMBOL_GPL(rust_helper_hlist_del_rcu);
 
+void rust_helper_skb_set_transport_header(struct sk_buff *skb,const int offset) {
+	return skb_set_transport_header(skb,offset) ; 
+}
+EXPORT_SYMBOL_GPL(rust_helper_skb_set_transport_header);
+
+void rust_helper_skb_set_network_header(struct sk_buff *skb , const int offset) {
+	return skb_set_network_header(skb,offset) ; 
+}
+EXPORT_SYMBOL_GPL(rust_helper_skb_set_network_header);
+
+void rust_helper_skb_set_mac_header(struct sk_buff *skb, const int offset) {
+	return skb_set_mac_header(skb,offset) ; 
+}
+EXPORT_SYMBOL_GPL(rust_helper_skb_set_mac_header);
+
+void rust_helper_skb_reserve (struct sk_buff *skb, int len ) {
+	return skb_set_mac_header(skb,len) ; 
+}
+EXPORT_SYMBOL_GPL(rust_helper_skb_reserve);
 
 
+unsigned char *rust_helper_skb_network_header(const struct sk_buff *skb) {
+	return skb_network_header(skb) ; 
+}
+EXPORT_SYMBOL_GPL(rust_helper_skb_network_header);
+
+unsigned char *rust_helper_skb_tail_pointer(const struct sk_buff *skb) {
+	return skb_tail_pointer(skb) ; 
+}
+EXPORT_SYMBOL_GPL(rust_helper_skb_tail_pointer);
+
+struct sk_buff *rust_helper_netdev_alloc_skb(struct net_device *dev,unsigned int length) {
+	return netdev_alloc_skb(dev,length) ; 
+}
+EXPORT_SYMBOL_GPL(rust_helper_netdev_alloc_skb);
 
 
+struct ethhdr *rust_helper_eth_hdr(const struct sk_buff *skb) {
+	return eth_hdr(skb) ; 
+}
+EXPORT_SYMBOL_GPL(rust_helper_eth_hdr);
+
+unsigned int rust_helper_ip_hdrlen(const struct sk_buff *skb) {
+	return ip_hdrlen(skb) ;
+}
+EXPORT_SYMBOL_GPL(rust_helper_ip_hdrlen);
+
+void rust_helper_hlist_add_head(struct hlist_node *n, struct hlist_head *h) {
+	return hlist_add_head(n,h) ; 
+}
+EXPORT_SYMBOL_GPL(rust_helper_hlist_add_head);
 
 
 /*
