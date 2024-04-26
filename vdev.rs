@@ -1,9 +1,10 @@
 use crate::bindings::*;
-
+use crate::netlink::SkBuff ; 
 
 
 /// NetDevice wraps C struct net_device 
 pub struct NetDevice(*mut bindings::net_device);
+
 
 impl NetDevice {
 
@@ -114,6 +115,36 @@ impl NetDevice {
         unsafe { bindings::netdev_priv(self.0) }
     }
     
+    ///	netdev_alloc_skb - allocate an skbuff for rx on a specific device
+    ///	@dev: network device to receive on
+    ///	@length: length to allocate
+    ///
+    ///	Allocate a new &sk_buff and assign it a usage count of one. The
+    ///	buffer has unspecified headroom built in. Users should allocate
+    ///	the headroom they think they need without accounting for the
+    ///	built in space. The built in space is used for optimisations.
+    ///
+    ///	%NULL is returned if there is no free memory. Although this function
+    /// allocates memory it can be called from an interrupt.
+    
+    pub fn netdev_alloc_skb(&self , length : core::ffi::c_uint)->*mut bindings::sk_buff {
+        unsafe {
+             bindings::netdev_alloc_skb(self.as_ptr(),length) 
+        }
+    }
+
+    ///
+    ///	dev_put - release reference to device
+    ///	@dev: network device
+    ///
+    /// Release reference to device to allow it to be freed.
+    /// Try using netdev_put() instead.
+    ///
+    pub fn dev_put(&self) {
+        unsafe {
+            bindings::dev_put(self.0) 
+        }
+    }
 
 }
 
@@ -206,6 +237,16 @@ pub fn hlist_add_head_rcu(n:&HlistNode,h:&HlistHead)
     unsafe { bindings::hlist_add_head_rcu(n.0,h.0)
      }
     }
+
+///
+///hlist_add_head - add a new entry at the beginning of the hlist
+///@n: new entry to be added
+///@h: hlist head to add it after
+///
+///Insert a new entry after the specified head.
+///This is good for implementing stacks.
+///
+
 
 
 /// Allocates a new `net_device` structure with a single transmit and receive queue.
@@ -310,5 +351,3 @@ macro_rules! hlist_for_each_entry_safe {
         }
     };
 }
-
-
