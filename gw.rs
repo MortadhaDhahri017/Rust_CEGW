@@ -1,3 +1,18 @@
+static CE_GW_GENL_POLICY: [NlaPolicy; CE_GW_A_MAX + 1] = [
+    NlaPolicy { type_: NLA_NUL_STRING },
+    NlaPolicy { type_: NLA_NUL_STRING },
+    NlaPolicy { type_: NLA_NUL_STRING },
+    NlaPolicy { type_: NLA_U32 },
+    NlaPolicy { type_: NLA_U32 },
+    NlaPolicy { type_: NLA_U8 },
+    NlaPolicy { type_: NLA_U32 },
+    NlaPolicy { type_: NLA_U32 },
+];
+
+
+
+
+
 fn ce_gw_netlink_echo(skb_info: Skbuff, info: GenlInfo) -> i32 {
     let mut skb: Skbuff;
     let mut err: i32;
