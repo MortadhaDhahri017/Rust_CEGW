@@ -3,6 +3,12 @@ use bindings::canid_t;
 use core::fmt::Formatter;
 use core::fmt::Display;
 use alloc::vec::Vec;
+use alloc::borrow::ToOwned;
+
+
+use crate::pr_info;
+
+#[allow(warnings)]
 
 #[derive(PartialEq)]
 
@@ -21,7 +27,7 @@ impl EtherType {
 #[derive(PartialEq)]
 pub struct TCP_Frame {
     pub header: TcpHeader,
-    pub data: [u8; 6],
+    pub data: [u8; 4],
 }
 #[derive(PartialEq)]
 pub struct Ipv4Frame {
@@ -76,16 +82,14 @@ pub struct Ipv4Header {
 }
 
 impl Ipv4Header {
-    fn serialized_size(&self) -> usize {
-      // Fixed-size fields
-      let fixed_size = 1 + 3 + 2 + 2 + 1 + 1 + 1 + 1 + 2 + 8; // Version, len, ToS, total_len, id, flags, frag_offset, ttl, protocol, checksum, src, dst
-  
-      // Header length calculation (assuming len includes options)
-      let header_length = (self.len & 0xF) * 4; // Extract lower 4 bits of len (assuming len includes options)
-  
-      (fixed_size + header_length).into()
+    pub fn serialized_size(&self)->usize{
+        let size=1+1+1+2+2+1+1+1+1+2+4+4;
+        size
     }
-  }
+    
+}
+
+
   
 
 #[derive(PartialEq)]
@@ -109,13 +113,7 @@ impl TcpHeader {
     // Fixed-size fields
     let fixed_size = 2 + 2 + 4 + 4 + 1 + 1 + 1 + 2 + 2 + 2; // src_port, dst_port, seq, ack, offset, reserved, flags, window, checksum, urgent_ptr
 
-    // Variable size based on options (data offset field)
-    let options_size = match (self.offset & 0xF) << 2 {
-      0 => 0, // No options
-      x => x, // Option length is encoded in the lower 4 bits of offset, multiplied by 4
-    };
-
-    (fixed_size + options_size).into()
+    fixed_size
   }
 }
 
@@ -193,57 +191,8 @@ impl core::fmt::Display for canfd_ethpayload {
     }
   }
 
-/* 
-  fn main() {
-    let mock_frame = EthFrame {
-    dst: [0x00, 0x0C, 0x29, 0x70, 0xAC, 0x1E],  // Destination MAC address (example)
-    src: [0x00, 0x5E, 0x70, 0x01, 0x02, 0x03],  // Source MAC address (example)
-    ethertype: EtherType::IPV4,
-    data: Ipv4Frame {
-        header: Ipv4Header {
-            version: 4,
-            len: 20,
-            ToS: 0,
-            total_len: 100,
-            id: 10,
-            flags: 0,
-            frag_offset: 0,
-            ttl: 64,
-            protocol: 6,  // TCP protocol
-            checksum: 0xABCD,
-            src: [192, 168, 1, 10],  // Source IP address (example)
-            dst: [10, 0, 0, 1],       // Destination IP address (example)
-        },
-        data: TCP_Frame {
-            header: TcpHeader {
-                src_port: 80,  // Example port number
-                dst_port: 443, // Example port number
-                seq: 0,
-                ack: 0,
-                offset: 5,    // Header length in 32-bit words (20 bytes)
-                reserved: 0,
-                flags: 0,
-                window: 1024,
-                checksum: 0x1234,
-                urgent_ptr: 0,
-            },
-            data: [0xCA, 0xFE, 0xBA, 0xBE], // Example TCP data (first 4 bytes)
-        },
-    },
-    fsc: 0xDEADBEEF,
-};
-// Test fmt function
-  let can_payload = canfd_ethpayload::from_eth_frame(&mock_frame);
-  println!("{}", can_payload);
 
-  // Test from_eth_frame function
-  let another_payload = canfd_ethpayload::from_eth_frame(&mock_frame);
-  assert_eq!(another_payload.can_id, 0);
-  assert_eq!(another_payload.len, 54); // 20 (IP header) + 20 (TCP header) + 4 (TCP data)
-  assert_eq!(another_payload.flags, 0);
-
-}*/
-fn serialize_canfd_ethpayload(payload: &canfd_ethpayload) -> Vec<u8> {
+pub fn serialize_canfd_ethpayload(payload: &canfd_ethpayload) -> Vec<u8> {
     let mut serialized_data = Vec::new();
 
     // Serialize can_id (u32)
@@ -313,218 +262,202 @@ fn serialize_tcp_header(tcp_header: &TcpHeader) -> Vec<u8> {
 
     serialized_data
 }
-/*  
-fn deserialize_canfd_ethpayload(data: &[u8]) -> Result<canfd_ethpayload, &'static str> {
-    if data.len() < 13 {
-        return Err("Byte stream too short for canfd_ethpayload");
+
+/*#[derive(PartialEq)]
+pub struct canfd_ethpayload {
+    pub can_id: canid_t,
+    pub len: u8,
+    pub flags: u8,
+    pub data_can :Ethload 
+} */
+
+impl canfd_ethpayload {
+
+    pub fn deserialize_canfd_ethpayload(buffer: &[u8]) -> Option<canfd_ethpayload> {
+        // Check if the buffer has enough data for all fields
+        /*if buffer.len() < mem::size_of::<Ipv4Header>() + mem::size_of::<TcpHeader>() + mem::size_of::<[u8; 4]>() {
+            return None;
+        }*/
+
+        // Extract individual field slices
+        let (can_id, rest) = buffer.split_at(4);
+        let (len, rest) = rest.split_at(1);
+        let (flags,rest)=rest.split_at(1) ; 
+        let (data_can_bytes, _) = rest.split_at(46);
+
+        let mut can_arr = [0; 4];
+        can_arr.copy_from_slice(can_id);
+
+        // Deserialize individual fields
+        let data_can = Ethload::from_bytes(data_can_bytes)?;
+     
+        let can_id = u32::from_be_bytes(can_arr);
+
+        Some(canfd_ethpayload {
+            can_id ,
+            len:len[0],
+            flags:flags[0],
+            data_can,
+        })
     }
-
-    let mut cursor = 0;
-
-    // Deserialize can_id (u32)
-    let can_id = u32::from_be_bytes(&data[cursor..cursor + 4]);
-    cursor += 4;
-
-    // Deserialize len (u8)
-    let len = data[cursor];
-    cursor += 1;
-
-    // Deserialize flags (u8)
-    let flags = data[cursor];
-    cursor += 1;
-
-    // Deserialize data_can (Ethload)
-    let ethload = deserialize_ethload(&data[cursor..])?;
-    cursor += ethload.serialized_size(); // Update cursor after deserializing Ethload
-
-    Ok(canfd_ethpayload {
-        can_id,
-        len,
-        flags,
-        data_can: ethload, // Use data_can instead of data
-    })
-}
-*/
-
-fn deserialize_ethload(data: &[u8]) -> Result<Ethload, &'static str> {
-    if data.len() < 20 {
-        return Err("Byte stream too short for Ethload");
-    }
-
-    let mut cursor = 0;
-
-    let iphdr = deserialize_ip_header(&data[cursor..])?;
-    cursor += iphdr.serialized_size(); // Assuming serialized_size is implemented
-
-    let tcphdr = deserialize_tcp_header(&data[cursor..])?;
-    cursor += tcphdr.serialized_size(); // Assuming serialized_size is implemented
-
-    let data_eth_mock = &data[cursor..cursor + 4];
-    cursor += 4;
-    let data_eth = if data_eth_mock.len() >= 4 {
-        [data_eth_mock[0], data_eth_mock[1], data_eth_mock[2], data_eth_mock[3]]
-      } else {
-        [0; 4] // Create an array with 4 zeroes if data_eth_mock is less than 4 bytes
-      };
-
-    Ok(Ethload {
-        iphdr,
-        tcphdr,
-        data_eth:data_eth,
-    })
 }
 
+impl Ethload {
+    pub fn from_bytes(buffer: &[u8]) -> Option<Ethload> {
+        // Check if the buffer has enough data for all fields
+        /*if buffer.len() < mem::size_of::<Ipv4Header>() + mem::size_of::<TcpHeader>() + mem::size_of::<[u8; 4]>() {
+            return None;
+        }*/
 
-fn deserialize_ip_header(data: &[u8]) -> Result<Ipv4Header, &'static str> {
-    if data.len() < 20 {
-        return Err("Byte stream too short for Ipv4Header");
+        // Extract individual field slices
+        pr_info!("{}", buffer.len());
+        let (iphdr_bytes, rest) = buffer.split_at(21);
+        let (tcphdr_bytes, rest) = rest.split_at(21);
+        let (data_eth, _) = rest.split_at(4);
+
+        // Deserialize individual fields
+        let iphdr = Ipv4Header::deserialize_ip_header(iphdr_bytes)?;
+        let tcphdr = TcpHeader::deserialize_tcp_header(tcphdr_bytes)?;
+        let data_eth_vec = data_eth.to_owned();
+        let data_eth_v1=vec_to_array(data_eth_vec) ; 
+
+
+        Some(Ethload {
+            iphdr,
+            tcphdr,
+            data_eth:data_eth_v1.unwrap(),
+        })
     }
+}
 
-    let mut cursor = 0;
-
-    let version = data[cursor];
-    cursor += 1;
-
-    let len = data[cursor];
-    cursor += 1;
-
-    let ToS = data[cursor];
-    cursor += 1;
-
-    // Fix for total_len, id, checksum:
-    let total_len_arr = slice_to_array_2(&data[cursor..cursor + 2])?;
-    let total_len = u16::from_be_bytes(total_len_arr);
-    cursor += 2;
-
-    let id_arr = slice_to_array_2(&data[cursor..cursor + 2])?;
-    let id = u16::from_be_bytes(id_arr);
-    cursor += 2;
-
-    let checksum_arr = slice_to_array_2(&data[cursor..cursor + 2])?;
-    let checksum = u16::from_be_bytes(checksum_arr);
-    cursor += 2;
-
-    let flags = data[cursor];
-    cursor += 1;
-
-    let frag_offset = data[cursor] & 0b01111111; // Mask to get only fragment offset bits
-    cursor += 1;
-
-    let ttl = data[cursor];
-    cursor += 1;
-
-    let protocol = data[cursor];
-    cursor += 1;
-
-    let src = slice_to_array_4(&data[cursor..cursor + 4])?;
-    cursor += 4;
-
-    let dst = slice_to_array_4(&data[cursor..cursor + 4])?;
-    cursor += 4;
+impl Ipv4Header {
+pub fn deserialize_ip_header(buffer: &[u8]) -> Option<Ipv4Header> {
+        // Check if the buffer has enough data (expected size)
+        /*if buffer.len() < mem::size_of::<Ipv4Header>() {
+            return None;
+        }*/
     
+        // Extract individual field values
+        let (version, rest) = buffer.split_at(1);
+        let (len, rest) = rest.split_at(1);
+        let (tos, rest) = rest.split_at(1);
+        let (total_len, rest) = rest.split_at(2);
+        let (id, rest) = rest.split_at(2);
+        let (flags, rest) = rest.split_at(1);
+        let (frag_offset, rest) = rest.split_at(1);
+        let (ttl, rest) = rest.split_at(1);
+        let (protocol, rest) = rest.split_at(1);
+        let (checksum, rest) = rest.split_at(2);
+        let (src,rest) = rest.split_at(4);
+        let (dst,_)=rest.split_at(4) ; 
 
-    Ok(Ipv4Header {
-        version,
-        len,
-        ToS,
-        total_len,
-        id,
-        flags,
-        frag_offset,
-        ttl,
-        protocol,
-        checksum,
-        src: src,
-        dst: dst ,
-    })
+        let mut total_len_arr = [0; 2];
+        total_len_arr.copy_from_slice(total_len);
+        let mut id_arr = [0; 2];
+        id_arr.copy_from_slice(id);
+        let mut checksum_arr = [0; 2];
+        checksum_arr.copy_from_slice(checksum);
+
+        let src_vec = src.to_owned();
+        let src_v1=vec_to_array(src_vec) ;  
+        let dst_vec = dst.to_owned();
+        let dst_v1=vec_to_array(dst_vec) ; 
+
+        // Convert slices to fixed-size values (avoid unnecessary copies)
+        let total_len = u16::from_be_bytes(total_len_arr);
+        let checksum = u16::from_be_bytes(checksum_arr) ; 
+        let id = u16::from_be_bytes(id_arr);
+        let ttl = ttl[0]; // Single byte for TTL
+   
+
+        // Create the Ipv4Header struct
+        Some(Ipv4Header {
+            version: version[0],
+            len: len[0],
+            ToS: tos[0],
+            total_len,
+            id,
+            flags: flags[0],
+            frag_offset: frag_offset[0],
+            ttl,
+            protocol: protocol[0],
+            checksum,
+            src:src_v1.unwrap(),
+            dst:dst_v1.unwrap(),
+        })
+    }
 }
+impl TcpHeader {
+    pub fn deserialize_tcp_header(buffer: &[u8]) -> Option<TcpHeader> {
 
-fn deserialize_tcp_header(data: &[u8]) -> Result<TcpHeader, &'static str> {
-    if data.len() < 20 {
-        return Err("Byte stream too short for TcpHeader");
+        // Extract individual field slices
+        let (src_port, rest) = buffer.split_at(2);
+        let (dst_port, rest) = rest.split_at(2);
+        let (seq, rest) = rest.split_at(4);
+        let (ack, rest) = rest.split_at(4);
+        let (offset, rest) = rest.split_at(1);
+        let (reserved,rest) =rest.split_at(1) ; 
+        let (flags, rest) = rest.split_at(1);
+        let (window, rest) = rest.split_at(2);
+        let (checksum, rest) = rest.split_at(2);
+        let (urgent_ptr, _) = rest.split_at(2);
+    
+        // Convert slices to fixed-size arrays before conversion
+        let mut src_port_arr = [0; 2];
+        src_port_arr.copy_from_slice(src_port);
+        let mut dst_port_arr = [0; 2];
+        dst_port_arr.copy_from_slice(dst_port);
+        let mut seq_arr = [0; 4];
+        seq_arr.copy_from_slice(seq);
+        let mut ack_arr = [0; 4];
+        ack_arr.copy_from_slice(ack);
+        let mut window_arr = [0; 2];
+        window_arr.copy_from_slice(window);
+        let mut checksum_arr = [0; 2];
+        checksum_arr.copy_from_slice(checksum);
+        let mut urgent_ptr_arr = [0; 2];
+        urgent_ptr_arr.copy_from_slice(urgent_ptr);
+    
+        // Extract individual fields and convert from network byte order
+        let src_port = u16::from_be_bytes(src_port_arr);
+        let dst_port = u16::from_be_bytes(dst_port_arr);
+        let seq = u32::from_be_bytes(seq_arr);
+        let ack = u32::from_be_bytes(ack_arr);
+        let offset = (offset[0] >> 4) & 0x0F;
+        let reserved = offset & 0x0F;
+        let flags = flags[0];
+        let window = u16::from_be_bytes(window_arr);
+        let checksum = u16::from_be_bytes(checksum_arr);
+        let urgent_ptr = u16::from_be_bytes(urgent_ptr_arr);
+    
+        // Create the TcpHeader struct
+        Some(TcpHeader{
+            src_port,
+            dst_port,
+            seq,
+            ack,
+            offset,
+            reserved,
+            flags,
+            window,
+            checksum,
+            urgent_ptr,
+        })
+    }
+}    
+
+
+fn vec_to_array(slice_data: &[u8]) -> Result<[u8; 4], &'static str> {
+    // Check if the slice has exactly 4 elements
+    if slice_data.len() != 4 {
+        return Err("Error: Slice must contain exactly 4 elements");
     }
 
-    let mut cursor = 0;
-
-    let src_port = u16::from_be_bytes(u8_to_array_2_with_padding(&data[cursor])) << 8 | data[cursor + 1]as u16;
-    cursor += 2;
-
-    let dst_port = u16::from_be_bytes(u8_to_array_2_with_padding(&data[cursor])) << 8 | data[cursor + 1] as u16;
-    cursor += 2;
-
-    let seq_arr = slice_to_array_4(&data[cursor..cursor + 4])?;
-    let seq = u32::from_be_bytes(seq_arr);
-    cursor += 4;
-
-    let ack_arr = slice_to_array_4(&data[cursor..cursor + 4])?; 
-    let ack = u32::from_be_bytes(ack_arr);
-    cursor += 4;
-
-    let offset = data[cursor]; // u8, no need for from_be_bytes()
-    cursor += 1;
-
-    let reserved = data[cursor]; // u8, no need for from_be_bytes()
-    cursor += 1;
-
-    let flags = data[cursor]; // u8, no need for from_be_bytes()
-    cursor += 1;
-
-    let window = u16::from_be_bytes(u8_to_array_2_with_padding(&data[cursor])) << 8 | data[cursor + 1] as u16;
-    cursor += 2;
-
-    let checksum = u16::from_be_bytes(u8_to_array_2_with_padding(&data[cursor])) << 8 | data[cursor + 1] as u16;
-    cursor += 2;
-
-    let urgent_ptr = u16::from_be_bytes(u8_to_array_2_with_padding(&data[cursor])) << 8 | data[cursor + 1] as u16;
-    cursor += 2;
-
-    Ok(TcpHeader {
-        src_port,
-        dst_port,
-        seq,
-        ack,
-        offset,
-        reserved,
-        flags,
-        window,
-        checksum,
-        urgent_ptr,
-    })
-}
-
-
-
-
-
-fn slice_to_array_2(data: &[u8]) -> Result<[u8; 2], &'static str> {
-    if data.len() < 2 {
-        return Err("Slice must have at least 2 elements");
+    // Safely convert the slice to a fixed-size array
+    unsafe {
+        // This is safe because we checked the slice length beforehand
+        let array: [u8; 4] = *(slice_data.as_ptr() as *const [u8; 4]);
+        Ok(array)
     }
-
-    // Safe because the check above ensures enough elements
-    let mut arr = [0; 2];
-    arr.copy_from_slice(&data[..2]);
-    Ok(arr)
 }
 
-fn slice_to_array_4(data: &[u8]) -> Result<[u8; 4], &'static str> {
-    if data.len() < 2 {
-        return Err("Slice must have at least 4 elements");
-    }
-
-    // Safe because the check above ensures enough elements
-    let mut arr = [0; 4];
-    arr.copy_from_slice(&data[..4]);
-    Ok(arr)
-}
-
-fn u8_to_array_2_with_padding(value: &u8) -> [u8; 2] {
-    let mut arr = [0; 2];
-    arr[0] = *value; // Copy the byte value
-    arr
-  }
-  fn u8_to_array_4_with_padding(value: &u8) -> [u8; 4] {
-    let mut arr = [0; 4];
-    arr[0] = *value; // Copy the byte value
-    arr
-  }
