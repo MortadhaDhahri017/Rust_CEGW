@@ -1,59 +1,55 @@
-# pfe-
-
 use core::ptr::null_mut;
-use kernel::prelude::* ; 
-use kernel::File::IoctlCommand ; 
+use kernel::prelude::*;
+use kernel::File::IoctlCommand;
+use kernel::module::{self, Module, ThisModule};
 // ... other imports
 
 use kernel::file::{File, IoctlHandler, UserSlicePtrReader, UserSlicePtrWriter};
 
+pub struct MyIoctlClient;
 
-pub struct MyIoctlClient ;
-
-pub const MY_MAGIC_NUMBER = 0xDEADBEEF ; 
-
+pub const MY_MAGIC_NUMBER: u32 = 0xDEADBEEF;
 
 // Assuming MY_IOCTL_CMD is defined elsewhere (refer to step 1 for details)
 
 impl IoctlHandler for MyIoctlClient {
     type Target<'a> = Self;
-    
-    fn read(
+
+    fn write(
         _this: Self::Target<'_>,
         file: &File,
         cmd: u32,
-        mut writer: &mut UserSlicePtrWriter,
+        mut reader: &mut UserSlicePtrReader,
     ) -> Result<i32> {
         if cmd != MY_IOCTL_CMD {
             return Err(ENOTTY); // Handle invalid command
         }
 
-        // Access kernel data (replace with your data access logic)
-        let data: &[u32] = &[1, 2, 3, 4, 5]; // Example data
+        // Determine the size of data expected to be received
+        let expected_data_size = core::mem::size_of::<u32>() * 5; // Example size for 5 u32 elements
 
-        // Check if the user-provided buffer has enough space
-        let user_size = writer.as_ptr().len();
-        if user_size < data.len() * core::mem::size_of::<u32>() {
-            return Err(EFAULT); // Insufficient user space buffer
+        // Prepare a buffer to receive data from user space
+        let mut data: Vec<u32> = Vec::with_capacity(expected_data_size);
+
+        // Read data from user space (be cautious - potential memory errors)
+        reader.read(&mut data)?;
+
+        // Process the received data
+        // Replace this with your data processing logic
+        for element in data.iter() {
+            printk(KERN_INFO "Received vector element: {}\n", element);
         }
-
-        // Copy data to user space (be cautious - potential memory errors)
-        writer.write(data)?;
 
         Ok(0) // Success
     }
-
-    
 }
 
 impl MyIoctlClient {
-    pub fn ioctl(&mut self, file: &File, cmd: u32, arg: usize) -> Result<i32> {
+    pub fn ioctl(&mut self, file: &File, cmd: u32, arg: usize) -> Result {
         let mut ioctl_cmd = IoctlCommand::new(cmd, arg);
-        ioctl_cmd.dispatch::<Self>(self, file)
+        ioctl_cmd.dispatch(self, file)
     }
 }
-
-
 
 #[repr(C)]
 pub struct vector_data {
@@ -88,5 +84,28 @@ pub unsafe fn my_ioctl(filp: &mut kernel::file::File, cmd: u32, arg: usize) -> R
     }
 
     Ok(())
+}
+
+
+impl Module for MyIoctlClient {
+    fn init(_name: &'static CStr, _module: &'static ThisModule) -> Result<Self> {
+        // Perform necessary setup or registration here
+        printk(KERN_INFO "MyIoctlClient module loaded\n");
+        Ok(MyIoctlClient)
+    }
+}
+
+module! {
+    type: MyIoctlClient,
+    name: b"my_ioctl_client",
+    author: b"Your Name",
+    description: b"My IOCTL Client Module",
+    license: b"GPL",
+    params: {},
+}
+
+fn cleanup(_this: &mut MyIoctlClient) {
+    // Perform necessary cleanup here
+    printk(KERN_INFO "MyIoctlClient module unloaded\n");
 }
 
