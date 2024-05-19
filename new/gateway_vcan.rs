@@ -3,15 +3,15 @@
 //! Rust echo server sample.
 
 use kernel::{
-    kasync::executor::{workqueue::Executor as WqExecutor, AutoStopHandle, Executor},
-    kasync::net::{TcpListener, TcpStream},
-    net::{self, Ipv4Addr, SocketAddr, SocketAddrV4},
-    prelude::*,
-    spawn_task,
-    sync::{Arc, ArcBorrow},
-    cegwtcp::*
+    cegwtcp::{self, *}, kasync::{executor::{workqueue::Executor as WqExecutor, AutoStopHandle, Executor}, net::{TcpListener, TcpStream}}, net::{self, Ipv4Addr, SocketAddr, SocketAddrV4}, prelude::*, spawn_task, sync::{Arc, ArcBorrow} 
 };
 
+
+use kernel::net::*;
+use kernel::error::*;
+use core::*;
+use kernel::bindings ;
+use kernel::cegwtcp::*; 
 use kernel::delay::coarse_sleep ; 
 use core::time::Duration;
 
@@ -74,6 +74,12 @@ async fn echo_server(stream: TcpStream) -> Result {
                 pr_info!("  - Byte {}: (no data)", i);
                 }
             } 
+
+                let remote_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(192,168,75,128),5550)) ;
+                coarse_sleep(Duration::from_secs(1)) ; 
+                let stream1 = connect(&remote_addr)?;
+                send_data(&stream1, array_to_vec(&buf))? ; 
+
             pr_info!("--------------------------------------------------------------") ; 
             
         return Ok(());
@@ -82,6 +88,37 @@ async fn echo_server(stream: TcpStream) -> Result {
         
 
 }
+
+pub fn connect(address: &SocketAddr) -> Result<net::TcpStream> {
+    let socket = Socket::new(AddressFamily::Inet, SockType::Stream, IpProtocol::Tcp)?;
+    socket.connect(address, 0)?; 
+    Ok(net::TcpStream {sock:unsafe{socket.as_inner()}})
+}
+/* 
+pub fn send_number(stream: &TcpStream, number: u32) -> Result<usize> {
+    let number_bytes = number.to_le_bytes();
+    stream.write(&number_bytes, true)
+    
+}*/
+
+pub fn send_data(stream: &net::TcpStream, data: Vec<u8>) -> Result<usize> {
+    // Ensure the data vector has exactly 52 elements
+    
+    
+    let mut buffer = [0u8; 52];
+    for (i, &item) in data.iter().enumerate() {
+        if i >= 52 {
+            break; // Prevent index out of bounds
+        }
+        buffer[i] = item;
+    }
+    // Write the data vector to the stream
+    stream.write(&buffer,true)
+
+    // Return the number of bytes written
+   
+}
+
 
 
 async fn accept_loop(listener: TcpListener, executor: Arc<impl Executor>) {
@@ -114,6 +151,15 @@ impl kernel::Module for RustEchoServer2 {
         })
     }
 }
+
+fn array_to_vec(arr: &[u8; 52]) -> Vec<u8> {
+    let mut vec = Vec::new();
+    for &item in arr.iter() {
+        vec.try_push(item);
+    }
+    vec
+}
+ 
 
 module! {
     type: RustEchoServer2,
