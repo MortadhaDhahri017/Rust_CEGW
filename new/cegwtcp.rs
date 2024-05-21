@@ -4,9 +4,10 @@ use core::fmt::Formatter;
 use core::fmt::Display;
 use alloc::vec::Vec;
 use alloc::borrow::ToOwned;
+use crate::delay::coarse_sleep ; 
+use core::time::Duration;
 
 
-use crate::pr_info;
 
 #[allow(warnings)]
 
@@ -35,6 +36,34 @@ pub struct Ipv4Frame {
     pub data_tcp: TCP_Frame,
 }
 
+ impl Ipv4Frame {
+        pub fn from_bytes(buffer: &[u8]) -> Option<Self> {
+            // Minimum buffer size check (adjusted based on struct definitions)
+            
+            // Extract individual field slices using nom (assuming all fields are present)
+            let (iphdr_bytes, rest) = buffer.split_at(21);
+            let (tcphdr_bytes, data) = buffer.split_at( 21);
+            let (data,_)=buffer.split_at(4) ; 
+    
+            // Deserialize individual fields
+            let iphdr = Ipv4Header::deserialize_ip_header(iphdr_bytes)?;
+            let tcphdr = TcpHeader::deserialize_tcp_header(tcphdr_bytes)?; // Assuming deserialize_tcp_header exists
+            let mut data_arr = [0; 4];
+            data_arr.copy_from_slice(data);
+    
+            // Return Ipv4Frame with data copy
+            Some(Self {
+                header: iphdr,
+                data_tcp: {
+                    TCP_Frame {
+                        header: tcphdr,
+                        data: data_arr,
+                    }
+                },
+            })
+        }
+    }
+    
 #[derive(PartialEq)]
 pub struct EthFrame {
     pub dst: [u8; 6],
@@ -63,7 +92,42 @@ impl EthFrame {
             None
         }
     }
-}
+    pub fn deserialize_ethernet(buffer: &[u8]) -> Option<Self> {
+            // Extract individual field slices using nom library
+            let (dst_mac, rest) = buffer.split_at(6);
+            let (src_mac, rest) = rest.split_at(6);
+            let (ethertype, rest) = rest.split_at(2);
+            let (data_ipv4_bytes, rest) = rest.split_at(46);
+            let (fsc,_)=rest.split_at(4) ; 
+    
+            let mut dst_arr = [0; 6];
+            dst_arr.copy_from_slice(dst_mac);
+    
+            let mut eth_arr = [0; 2];
+            eth_arr.copy_from_slice(ethertype);
+    
+            let mut src_arr = [0; 6];
+            src_arr.copy_from_slice(src_mac);
+    
+            // Deserialize individual fields
+            let data_ipv4 = Ipv4Frame::from_bytes(data_ipv4_bytes)?;
+
+
+            let mut fsc_arr = [0; 4];
+            fsc_arr.copy_from_slice(fsc);
+            
+            let fsc = u32::from_be_bytes(fsc_arr);
+    
+            Some(Self {
+                dst: dst_arr,
+                src: src_arr,
+                ethertype: EtherType(u16::from_be_bytes(eth_arr)),
+                data_ipv4,
+                fsc, // You'll need to adjust this based on your specific requirements
+            })
+        }
+    }
+
 #[derive(PartialEq)]
 #[derive(Copy, Clone)]
 pub struct Ipv4Header {
@@ -157,7 +221,9 @@ impl canfd_ethpayload {
   
       // Calculate the total length of the payload: IP header size + TCP header size + data size
       let payload_len = ip_header.len as u8 + tcp_header.offset * 4 + data_slice.len() as u8;
-  
+      
+
+
       canfd_ethpayload {
         can_id: 0, // Set default value for CAN ID
         len: payload_len,
@@ -207,6 +273,9 @@ pub fn serialize_canfd_ethpayload(payload: &canfd_ethpayload) -> Vec<u8> {
     // Serialize data_can (Ethload)
     serialized_data.try_extend_from_slice(&serialize_ethload(&payload.data_can));
 
+ 
+
+
     serialized_data
 }
 
@@ -221,6 +290,8 @@ fn serialize_ethload(ethload: &Ethload) -> Vec<u8> {
 
     // Serialize data_eth (slice of u8)
     serialized_data.try_extend_from_slice(&ethload.data_eth);
+
+  
 
     serialized_data
 }
@@ -242,6 +313,7 @@ fn serialize_ip_header(ip_header: &Ipv4Header) -> Vec<u8> {
     serialized_data.try_extend_from_slice(&ip_header.src);
     serialized_data.try_extend_from_slice(&ip_header.dst);
 
+  
     serialized_data
 }
 
@@ -259,6 +331,8 @@ fn serialize_tcp_header(tcp_header: &TcpHeader) -> Vec<u8> {
     serialized_data.try_extend_from_slice(&tcp_header.window.to_be_bytes());
     serialized_data.try_extend_from_slice(&tcp_header.checksum.to_be_bytes());
     serialized_data.try_extend_from_slice(&tcp_header.urgent_ptr.to_be_bytes());
+
+
 
     serialized_data
 }
@@ -293,6 +367,8 @@ impl canfd_ethpayload {
      
         let can_id = u32::from_be_bytes(can_arr);
 
+   
+
         Some(canfd_ethpayload {
             can_id ,
             len:len[0],
@@ -309,8 +385,6 @@ impl Ethload {
             return None;
         }*/
 
-        // Extract individual field slices
-        pr_info!("{}", buffer.len());
         let (iphdr_bytes, rest) = buffer.split_at(21);
         let (tcphdr_bytes, rest) = rest.split_at(21);
         let (data_eth, _) = rest.split_at(4);
@@ -320,8 +394,8 @@ impl Ethload {
         let tcphdr = TcpHeader::deserialize_tcp_header(tcphdr_bytes)?;
         let data_eth_vec = data_eth.to_owned();
         let data_eth_v1=vec_to_array(data_eth_vec) ; 
-
-
+        
+  
         Some(Ethload {
             iphdr,
             tcphdr,
@@ -369,6 +443,7 @@ pub fn deserialize_ip_header(buffer: &[u8]) -> Option<Ipv4Header> {
         let id = u16::from_be_bytes(id_arr);
         let ttl = ttl[0]; // Single byte for TTL
    
+    
 
         // Create the Ipv4Header struct
         Some(Ipv4Header {
@@ -429,7 +504,7 @@ impl TcpHeader {
         let window = u16::from_be_bytes(window_arr);
         let checksum = u16::from_be_bytes(checksum_arr);
         let urgent_ptr = u16::from_be_bytes(urgent_ptr_arr);
-    
+ 
         // Create the TcpHeader struct
         Some(TcpHeader{
             src_port,
