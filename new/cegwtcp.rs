@@ -92,6 +92,29 @@ impl EthFrame {
             None
         }
     }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        
+        bytes.try_extend_from_slice(&self.dst).unwrap(); // unwrap added for error handling
+        bytes.try_extend_from_slice(&self.src).unwrap(); // unwrap added for error handling
+        bytes.try_extend_from_slice(&self.ethertype.0.to_be_bytes()).unwrap(); // unwrap added for error handling
+        
+        // Serialize the IP header using the standalone function
+        bytes.try_extend_from_slice(&serialize_ip_header(&self.data_ipv4.header));
+        
+        // Serialize the TCP header using the standalone function
+        bytes.try_extend_from_slice(&serialize_tcp_header(&self.data_ipv4.data_tcp.header));
+        
+        bytes.try_extend_from_slice(&self.data_ipv4.data_tcp.data).unwrap(); // Assuming data is already in byte form
+        bytes.try_extend_from_slice(&self.fsc.to_be_bytes()).unwrap(); // unwrap added for error handling
+        
+        bytes
+    }
+
+
+    
+
     pub fn deserialize_ethernet(buffer: &[u8]) -> Option<Self> {
             // Extract individual field slices using nom library
             let (dst_mac, rest) = buffer.split_at(6);
@@ -212,8 +235,8 @@ pub struct canfd_ethpayload {
 
 impl canfd_ethpayload {
     pub fn from_eth_frame(frame: &EthFrame) -> Self {
-      let ip_header = frame.get_ip_header().unwrap_or_else(|| panic!("Frame does not contain an IPv4 header"));
-      let tcp_header = frame.get_tcp_header().unwrap_or_else(|| panic!("Frame does not contain a TCP header"));
+      let ip_header = frame.data_ipv4.header ; 
+      let tcp_header = frame.data_ipv4.data_tcp.header ; 
   
       // Assuming data.len() is at least the size of the copied data (here, 4 bytes)
       let mut data_slice = [0; 4]; // Initialize data with zeroes
@@ -229,8 +252,8 @@ impl canfd_ethpayload {
         len: payload_len,
         flags: 0, // Set default value for flags (you can define flags if needed)
         data_can: Ethload {
-          iphdr: *ip_header,
-          tcphdr: *tcp_header,
+          iphdr: ip_header,
+          tcphdr: tcp_header,
           data_eth: data_slice,
         },
       }
@@ -535,4 +558,3 @@ fn vec_to_array(slice_data: &[u8]) -> Result<[u8; 4], &'static str> {
         Ok(array)
     }
 }
-
