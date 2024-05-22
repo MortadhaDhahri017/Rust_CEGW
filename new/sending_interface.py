@@ -71,7 +71,7 @@ class App(tk.Tk):
 
     def create_tcpheader(self, parent):
         self.create_section_label(parent, "TcpHeader")
-        self.create_field(parent, "src_port", 2, "04D2")
+        self.create_field(parent, "src_port", 2, "1234")
         self.create_field(parent, "dst_port", 2, "0050")
         self.create_field(parent, "seq", 4, "00000000")
         self.create_field(parent, "ack", 4, "00000000")
@@ -128,22 +128,27 @@ class App(tk.Tk):
     def collect_data(self):
         data = b''
         field_order = [
-            'eth_dst', 'eth_src', 'ethertype',
-            'version', 'len', 'ToS', 'total_len', 'id', 'flags', 'frag_offset', 'ttl', 'protocol', 'checksum',
-            'ipv4_src', 'ipv4_dst',
-            'src_port', 'dst_port', 'seq', 'ack', 'offset', 'reserved', 'flags', 'window', 'checksum', 'urgent_ptr', 'tcp_data',
-            'fsc'
+            ('eth_dst', 6), ('eth_src', 6), ('ethertype', 2),
+            ('version', 1), ('len', 1), ('ToS', 1), ('total_len', 2), ('id', 2), ('flags', 1), ('frag_offset', 1), ('ttl', 1), ('protocol', 1), ('checksum', 2),
+            ('ipv4_src', 4), ('ipv4_dst', 4),
+            ('src_port', 2), ('dst_port', 2), ('seq', 4), ('ack', 4), ('offset', 1), ('reserved', 1), ('flags', 1), ('window', 2), ('checksum', 2), ('urgent_ptr', 2), ('tcp_data', 4),
+            ('fsc', 4)
         ]
         try:
-            for name in field_order:
+            for name, length in field_order:
                 entries = self.fields[name]
-                for entry in entries:
-                    value = int(entry.get(), 16)  # Read as hexadecimal
-                    if name in ["ethertype", "src_port", "dst_port", "total_len", "id", "checksum", "window", "urgent_ptr"]:
-                        data += struct.pack('!H', value)
-                    elif name in ["seq", "ack", "fsc"]:
-                        data += struct.pack('!I', value)
-                    else:
+                if length == 1:
+                    value = int(entries[0].get(), 16)
+                    data += struct.pack('!B', value)
+                elif length == 2:
+                    value = int(''.join(entry.get() for entry in entries), 16)
+                    data += struct.pack('!H', value)
+                elif length == 4:
+                    value = int(''.join(entry.get() for entry in entries), 16)
+                    data += struct.pack('!I', value)
+                elif length == 6:
+                    for entry in entries:
+                        value = int(entry.get(), 16)
                         data += struct.pack('!B', value)
             return data
         except ValueError:
@@ -153,4 +158,3 @@ class App(tk.Tk):
 if __name__ == "__main__":
     app = App()
     app.mainloop()
-
